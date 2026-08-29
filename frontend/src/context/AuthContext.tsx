@@ -4,6 +4,8 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
+  signInWithRedirect,
+  getRedirectResult,
   onAuthStateChanged,
   signOut,
   sendEmailVerification,
@@ -124,6 +126,26 @@ const signUpErrorMessage = (code: string): string => {
   }
 };
 
+const googleErrorMessage = (code: string): string => {
+  switch (code) {
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Google sign-in was cancelled.';
+    case 'auth/popup-blocked':
+      return 'Your browser blocked the sign-in popup. Please allow pop-ups for this site and try again.';
+    case 'auth/unauthorized-domain':
+      return `${window.location.hostname} is not an authorised domain for Google sign-in. Add it under Firebase Console -> Authentication -> Settings -> Authorized domains.`;
+    case 'auth/operation-not-allowed':
+      return 'Google sign-in is not enabled for this Firebase project.';
+    case 'auth/account-exists-with-different-credential':
+      return 'An account already exists with this email. Please sign in with your email and password instead.';
+    case 'auth/network-request-failed':
+      return 'Network error. Please check your internet connection.';
+    default:
+      return 'Google sign-in could not be completed.';
+  }
+};
+
 /* -------------------------------------------------------------------------- */
 /*  Role handling                                                             */
 /*                                                                            */
@@ -150,6 +172,36 @@ const writeRole = (uid: string, role: UserRole) => {
   } catch {
     /* localStorage unavailable */
   }
+};
+
+const readStoredRole = (uid: string): string | null => {
+  try {
+    return localStorage.getItem(roleKey(uid));
+  } catch {
+    return null;
+  }
+};
+
+/* The redirect fallback reloads the page, so the chosen role has to survive it. */
+const PENDING_ROLE_KEY = 'asraverse_pending_google_role';
+
+const rememberPendingRole = (role: UserRole) => {
+  try {
+    sessionStorage.setItem(PENDING_ROLE_KEY, role);
+  } catch {
+    /* sessionStorage unavailable */
+  }
+};
+
+const takePendingRole = (): UserRole => {
+  try {
+    const stored = sessionStorage.getItem(PENDING_ROLE_KEY) as UserRole | null;
+    sessionStorage.removeItem(PENDING_ROLE_KEY);
+    if (stored && AVAILABLE_ROLES.some((r) => r.role === stored)) return stored;
+  } catch {
+    /* sessionStorage unavailable */
+  }
+  return 'FARMER';
 };
 
 /** Build the app-level User from the Firebase auth record only. */
@@ -203,6 +255,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Completes the redirect fallback used when a popup could not be opened.
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then((cred) => {
+        if (cred?.user) finishGoogleSignIn(cred.user, takePendingRole());
+      })
+      .catch((err) => {
+        console.warn('[Firebase Auth] Google redirect sign-in failed:', err);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 1. Email & Password Sign In
@@ -271,31 +335,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 3. Google Sign In (Firebase Authentication provider — still no profile storage)
-  const loginWithGoogle = async (role: UserRole = 'FARMER'): Promise<AuthResponse> => {
+  // 3. Google Sign In (Firebase Authentication provider - still no profile storage)
+
+  /**
+   * Shared tail for both the popup and the redirect flow.
+   *
+   * onAuthStateChanged has already fired by this point, and it resolved the role
+   * from localStorage *before* a first-time Google user had one - so it defaulted
+   * to FARMER. Persist the requested role, then refresh the context user, or the
+   * app would route a new BUYER/EXPERT/TRANSPORT straight into "Access Restricted".
+   */
+  const finishGoogleSignIn = (fbUser: FirebaseUser, role: UserRole): AuthResponse => {
+    if (!readStoredRole(fbUser.uid)) writeRole(fbUser.uid, role);
+
+    const appUser = toAppUser(fbUser);
+    setUser(appUser);
     try {
-      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+      localStorage.setItem('asraverse_user', JSON.stringify(appUser));
+    } catch {
+      /* localStorage unavailable */
+    }
 
-      // Only assign the requested role the first time this account is seen here.
-      let existing: string | null = null;
-      try {
-        existing = localStorage.getItem(roleKey(cred.user.uid));
-      } catch {
-        /* localStorage unavailable */
-      }
-      if (!existing) writeRole(cred.user.uid, role);
+    return { success: true, role: appUser.role, user: appUser };
+  };
 
-      const appUser = toAppUser(cred.user);
-      return { success: true, role: appUser.role, user: appUser };
+  const loginWithGoogle = async (role: UserRole = 'FARMER'): Promise<AuthResponse> => {
+    const provider = new GoogleAuthProvider();
+    // Always offer the account chooser rather than silently reusing a session.
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    try {
+      const cred = await signInWithPopup(auth, provider);
+      return finishGoogleSignIn(cred.user, role);
     } catch (e: any) {
       const code = e?.code || '';
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        return { success: false, message: 'Google sign-in was cancelled.' };
+
+      // Popups are blocked outright in some browsers and in embedded webviews.
+      // Fall back to a full-page redirect, picked up by getRedirectResult below.
+      if (
+        code === 'auth/popup-blocked' ||
+        code === 'auth/operation-not-supported-in-this-environment'
+      ) {
+        try {
+          rememberPendingRole(role);
+          await signInWithRedirect(auth, provider);
+          return { success: false, message: 'Redirecting to Google sign-in...' };
+        } catch (redirectErr: any) {
+          return { success: false, message: googleErrorMessage(redirectErr?.code || '') };
+        }
       }
-      if (code === 'auth/operation-not-allowed') {
-        return { success: false, message: 'Google sign-in is not enabled for this Firebase project.' };
-      }
-      return { success: false, message: 'Google sign-in could not be completed.' };
+
+      return { success: false, message: googleErrorMessage(code) };
     }
   };
 
