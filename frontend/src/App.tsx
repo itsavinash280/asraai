@@ -41,18 +41,17 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    <div className="flex min-h-screen flex-col bg-paper-100 text-ink-950 dark:bg-ink-950 dark:text-ink-100">
       <Navbar toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <VoiceAssistantModal />
 
-      <main className="flex-1 lg:pl-64 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
-        </div>
+      {/* Sidebar is 18rem (w-72) from the lg breakpoint up. */}
+      <main className="flex-1 lg:pl-72">
+        <div className="px-gutter py-12 lg:py-16">{children}</div>
       </main>
 
-      <div className="lg:pl-64">
+      <div className="lg:pl-72">
         <Footer />
       </div>
     </div>

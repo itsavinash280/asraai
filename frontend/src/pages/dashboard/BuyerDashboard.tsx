@@ -11,36 +11,27 @@ import {
   Clock,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { PageHeader } from '../../components/dashboard';
 
 export const BuyerDashboard: React.FC = () => {
   const { user } = useAuth();
 
   return (
-    <div className="space-y-8 animate-in fade-in max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">
-              Buyer Procurement Portal
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold">
-              Welcome, {user?.name || 'Agro Wholesale Buyer'}! 🌾
-            </h1>
-            <p className="text-xs text-slate-300">
-              Procure wholesale grade commodities direct from 10,000+ verified Indian farm gates.
-            </p>
-          </div>
-
+    <div className="space-y-14">
+      <PageHeader
+        eyebrow="Buyer procurement portal"
+        title={<>Welcome, {user?.name || 'Agro Wholesale Buyer'}.</>}
+        lede="Procure wholesale grade commodities direct from 10,000+ verified Indian farm gates."
+        actions={
           <Link
             to="/marketplace"
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs shadow transition self-start"
+            className="inline-flex items-center gap-2.5 rounded-full bg-ink-950 px-7 py-3.5 text-[13px] text-paper-50 transition-colors duration-500 hover:bg-agro-600 dark:bg-white dark:text-ink-950"
           >
-            <ShoppingBag className="w-4 h-4" />
+            <ShoppingBag className="h-4 w-4" aria-hidden="true" />
             <span>Search Produce Mandi</span>
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">

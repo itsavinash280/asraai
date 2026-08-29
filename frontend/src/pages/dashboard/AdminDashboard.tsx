@@ -21,6 +21,7 @@ import {
 } from 'recharts';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { PageHeader } from '../../components/dashboard';
 
 export const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -56,21 +57,12 @@ export const AdminDashboard: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-8 animate-in fade-in max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="rounded-3xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white p-6 sm:p-8 shadow-xl">
-        <div className="space-y-1">
-          <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
-            Platform Operations & Compliance
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold">
-            National Agricultural Administration Center
-          </h1>
-          <p className="text-xs text-slate-300">
-            Monitor AI model throughput, transaction volumes, user compliance, and dispute resolution.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-14">
+      <PageHeader
+        eyebrow="Platform operations & compliance"
+        title="National Agricultural Administration"
+        lede="Monitor AI model throughput, transaction volumes, user compliance, and dispute resolution."
+      />
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-xs">

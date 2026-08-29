@@ -1,32 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import {
-  Sprout,
-  ShieldCheck,
-  ArrowRight,
-  Lock,
-  Mail,
-  User as UserIcon,
-  Phone,
-  Eye,
-  EyeOff,
-  UserPlus,
-  LogIn,
-  ArrowLeft,
-  Sparkles,
-  Shield,
-} from 'lucide-react';
+import { ArrowLeft, Check } from 'lucide-react';
 import { useAuth, AVAILABLE_ROLES } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 import { getRoleHomePath } from '../../components/common/ProtectedRoute';
 import { EmailVerificationScreen } from '../../components/auth/EmailVerificationScreen';
+import { AuthLayout } from '../../components/auth/AuthLayout';
+import { Button, Field, PasswordField } from '../../components/ui';
 
 export interface LoginPageProps {
   initialRole?: UserRole;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
-  const { user, login, register, loginWithGoogle, isLoading } = useAuth();
+  const { user, login, register, loginWithGoogle, resetPassword, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -36,13 +23,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
   const [actionLoading, setActionLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [noticeMsg, setNoticeMsg] = useState<string | null>(null);
 
   // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   // Role Selection Modal for Google Sign In
   const [showGoogleRoleModal, setShowGoogleRoleModal] = useState(false);
@@ -69,27 +56,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
     }
   }, [initialRole, location.state]);
 
+  const goAfterAuth = (roleForNav: UserRole) => {
+    const from = (location.state as any)?.from?.pathname;
+    navigate(from || getRoleHomePath(roleForNav), { replace: true });
+  };
+
   // Handle standard Form Submit (Sign In or Register)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setNoticeMsg(null);
     setActionLoading(true);
 
     if (isRegisterMode) {
-      const res = await register({
-        name,
-        email,
-        phone,
-        password,
-        role: selectedRole,
-      });
+      const res = await register({ name, email, phone, password, role: selectedRole });
       setActionLoading(false);
 
       if (res.needsVerification && res.verificationEmail) {
         setVerificationEmail(res.verificationEmail);
       } else if (res.success && res.role) {
-        const from = (location.state as any)?.from?.pathname;
-        navigate(from || getRoleHomePath(res.role), { replace: true });
+        goAfterAuth(res.role);
       } else {
         setErrorMsg(res.message || 'Registration failed. Please check your details.');
       }
@@ -100,8 +86,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
       if (res.needsVerification && res.verificationEmail) {
         setVerificationEmail(res.verificationEmail);
       } else if (res.success && res.role) {
-        const from = (location.state as any)?.from?.pathname;
-        navigate(from || getRoleHomePath(res.role), { replace: true });
+        goAfterAuth(res.role);
       } else {
         setErrorMsg(res.message || 'Invalid email or password.');
       }
@@ -111,6 +96,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
   // Handle Google Sign-In
   const handleGoogleSignIn = async (roleToUse: UserRole = selectedRole) => {
     setErrorMsg(null);
+    setNoticeMsg(null);
     setGoogleLoading(true);
     setShowGoogleRoleModal(false);
 
@@ -120,30 +106,34 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
     if (res.needsVerification && res.verificationEmail) {
       setVerificationEmail(res.verificationEmail);
     } else if (res.success && res.role) {
-      const from = (location.state as any)?.from?.pathname;
-      navigate(from || getRoleHomePath(res.role), { replace: true });
+      goAfterAuth(res.role);
     } else {
       setErrorMsg(res.message || 'Google Sign-In could not be completed.');
     }
   };
 
+  // Forgot password
+  const handleForgotPassword = async () => {
+    setErrorMsg(null);
+    setNoticeMsg(null);
+    const res = await resetPassword(email);
+    if (res.success) setNoticeMsg(res.message || 'Reset link sent.');
+    else setErrorMsg(res.message || 'Could not send the reset link.');
+  };
+
   // Quick Demo account auto-fill & login
   const handleQuickDemo = async (role: UserRole) => {
     setErrorMsg(null);
+    setNoticeMsg(null);
     setActionLoading(true);
 
     let demoEmail = 'farmer1@asraverse.in';
-    let demoPass = 'Password@123';
+    const demoPass = 'Password@123';
 
-    if (role === 'BUYER') {
-      demoEmail = 'buyer.organic@harvest.com';
-    } else if (role === 'EXPERT') {
-      demoEmail = 'anita.verma@kvk.org.in';
-    } else if (role === 'TRANSPORT') {
-      demoEmail = 'logistics.ramesh@express.in';
-    } else if (role === 'ADMIN') {
-      demoEmail = 'admin@asraverse.in';
-    }
+    if (role === 'BUYER') demoEmail = 'buyer.organic@harvest.com';
+    else if (role === 'EXPERT') demoEmail = 'anita.verma@kvk.org.in';
+    else if (role === 'TRANSPORT') demoEmail = 'logistics.ramesh@express.in';
+    else if (role === 'ADMIN') demoEmail = 'admin@asraverse.in';
 
     setEmail(demoEmail);
     setPassword(demoPass);
@@ -154,372 +144,273 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
     if (res.needsVerification && res.verificationEmail) {
       setVerificationEmail(res.verificationEmail);
     } else if (res.success && res.role) {
-      const from = (location.state as any)?.from?.pathname;
-      navigate(from || getRoleHomePath(res.role), { replace: true });
+      goAfterAuth(res.role);
     } else {
       setErrorMsg(res.message || 'Demo account login failed.');
     }
   };
 
-  // If email verification is needed, show the verification screen instead
   if (verificationEmail) {
     return <EmailVerificationScreen email={verificationEmail} />;
   }
 
-  return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 py-12 select-none relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+  const registerRoles = AVAILABLE_ROLES.filter((r) => r.role !== 'ADMIN');
 
-      {/* Top Back Navigation */}
-      <div className="max-w-lg w-full mb-4 flex items-center justify-between z-10">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-agro-400 transition"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Homepage (मुख्य पृष्ठ पर लौटें)</span>
-        </Link>
+  return (
+    <AuthLayout
+      eyebrow={isRegisterMode ? 'Create an account' : 'Welcome back'}
+      title={
+        isRegisterMode ? (
+          <>
+            Start this <span className="text-agro-400">season.</span>
+          </>
+        ) : (
+          <>
+            Back to the <span className="text-agro-400">field.</span>
+          </>
+        )
+      }
+      lede={
+        isRegisterMode
+          ? 'Crop planning, leaf diagnosis, price forecasting and direct trade — free for every Indian farmer.'
+          : 'Sign in to your advisory, marketplace and mandi intelligence.'
+      }
+    >
+      {/* Mode switch */}
+      <div
+        className="flex items-center gap-8 border-b border-white/10 pb-5"
+        role="tablist"
+        aria-label="Authentication mode"
+      >
+        {[
+          { label: 'Sign in', reg: false },
+          { label: 'Create account', reg: true },
+        ].map((tab) => (
+          <button
+            key={tab.label}
+            role="tab"
+            aria-selected={isRegisterMode === tab.reg}
+            onClick={() => {
+              setIsRegisterMode(tab.reg);
+              setErrorMsg(null);
+              setNoticeMsg(null);
+            }}
+            className={`link-underline text-[13px] transition-colors duration-300 ${
+              isRegisterMode === tab.reg ? 'text-white' : 'text-white/40 hover:text-white/70'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6 relative z-10">
-        {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <Link to="/" className="inline-block">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 via-agro-500 to-emerald-400 flex items-center justify-center text-white mx-auto shadow-lg shadow-emerald-500/25 hover:scale-105 transition">
-              <Sprout className="w-8 h-8" />
-            </div>
-          </Link>
-          <div className="flex items-center justify-center gap-1.5">
-            <h1 className="text-2xl font-black text-white">
-              Asra<span className="text-agro-400">Verse</span> AI
-            </h1>
-            <span className="text-[10px] font-extrabold bg-agro-500/20 text-agro-300 px-2 py-0.5 rounded-full border border-agro-500/30">
-              National Portal
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 font-medium">
-            {isRegisterMode
-              ? 'Create your digital agriculture account to access AI advisories & Mandi trade'
-              : 'Sign in to access your AI Crop Advisory, Mandi Marketplace & Agri Intelligence'}
-          </p>
+      {/* Google */}
+      <button
+        type="button"
+        onClick={() => {
+          if (isRegisterMode) setShowGoogleRoleModal(true);
+          else handleGoogleSignIn(selectedRole);
+        }}
+        disabled={googleLoading || actionLoading}
+        className="mt-10 flex w-full items-center justify-center gap-3 rounded-full border border-white/20 py-4 text-[13px] text-white transition-colors duration-500 hover:border-white/50 disabled:opacity-40"
+      >
+        {googleLoading ? (
+          <span
+            aria-hidden="true"
+            className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+          />
+        ) : (
+          <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z" />
+            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z" />
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
+          </svg>
+        )}
+        <span>Continue with Google</span>
+      </button>
+
+      <div className="my-8 flex items-center gap-4">
+        <span className="h-px flex-1 bg-white/10" />
+        <span className="text-eyebrow uppercase text-white/30">or</span>
+        <span className="h-px flex-1 bg-white/10" />
+      </div>
+
+      {/* Messages */}
+      {errorMsg && (
+        <div role="alert" className="mb-8 border-l-2 border-rose-400 pl-4 text-sm text-rose-300">
+          {errorMsg}
         </div>
-
-        {/* Google Authentication Button */}
-        <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => {
-              if (isRegisterMode) {
-                setShowGoogleRoleModal(true);
-              } else {
-                handleGoogleSignIn(selectedRole);
-              }
-            }}
-            disabled={googleLoading || actionLoading}
-            className="w-full py-3 px-4 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 text-white font-bold text-xs flex items-center justify-center gap-3 transition shadow-sm hover:border-slate-600 active:scale-[0.98] disabled:opacity-60"
-          >
-            {googleLoading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                  />
-                </svg>
-                <span>Continue with Google (Google से जारी रखें)</span>
-              </>
-            )}
-          </button>
-
-          {/* Divider */}
-          <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-slate-800" />
-            <span className="flex-shrink mx-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Or with Email / Password
-            </span>
-            <div className="flex-grow border-t border-slate-800" />
-          </div>
+      )}
+      {noticeMsg && (
+        <div role="status" className="mb-8 flex gap-3 border-l-2 border-agro-400 pl-4 text-sm text-agro-300">
+          <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>{noticeMsg}</span>
         </div>
+      )}
 
-        {/* Tab Switcher */}
-        <div className="flex p-1 bg-slate-800/60 rounded-2xl border border-slate-800">
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegisterMode(false);
-              setErrorMsg(null);
-            }}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
-              !isRegisterMode
-                ? 'bg-agro-600 text-white shadow-md shadow-agro-600/30'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <LogIn className="w-4 h-4" />
-            <span>Sign In</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegisterMode(true);
-              setErrorMsg(null);
-            }}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
-              isRegisterMode
-                ? 'bg-agro-600 text-white shadow-md shadow-agro-600/30'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Create Account</span>
-          </button>
-        </div>
-
-        {/* Error Notification */}
-        {errorMsg && (
-          <div className="p-3.5 rounded-2xl bg-rose-950/60 border border-rose-800/80 text-xs font-semibold text-rose-300 animate-in fade-in">
-            {errorMsg}
-          </div>
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {isRegisterMode && (
+          <Field
+            label="Full name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ramesh Kumar"
+            autoComplete="name"
+            required
+          />
         )}
 
-        {/* Authentication Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 animate-in fade-in">
-          {isRegisterMode && (
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                Full Name (पूरा नाम)
-              </label>
-              <div className="relative">
-                <UserIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Ramesh Kumar"
-                  required
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white text-xs focus:ring-2 focus:ring-agro-500 focus:outline-none placeholder:text-slate-600"
-                />
-              </div>
-            </div>
+        <Field
+          label="Email address"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          required
+        />
+
+        {isRegisterMode && (
+          <Field
+            label="Phone number"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+91 98765 43210"
+            autoComplete="tel"
+          />
+        )}
+
+        <div>
+          <PasswordField
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
+            hint={isRegisterMode ? 'At least 6 characters.' : undefined}
+            required
+          />
+          {!isRegisterMode && (
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="link-underline mt-4 text-xs text-white/40 hover:text-white"
+            >
+              Forgot your password?
+            </button>
           )}
-
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-              Email Address or Mobile Number (ईमेल / मोबाइल)
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="farmer1@asraverse.in or 9876543210"
-                required
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white text-xs focus:ring-2 focus:ring-agro-500 focus:outline-none placeholder:text-slate-600"
-              />
-            </div>
-          </div>
-
-          {isRegisterMode && (
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                Phone Number (मोबाइल नंबर)
-              </label>
-              <div className="relative">
-                <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white text-xs focus:ring-2 focus:ring-agro-500 focus:outline-none placeholder:text-slate-600"
-                />
-              </div>
-            </div>
-          )}
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300">
-                Password (पासवर्ड)
-              </label>
-            </div>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white text-xs focus:ring-2 focus:ring-agro-500 focus:outline-none placeholder:text-slate-600"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-300"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          {isRegisterMode && (
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                Account Role (खाता प्रकार)
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {AVAILABLE_ROLES.filter((r) => r.role !== 'ADMIN').map((r) => (
-                  <button
-                    key={r.role}
-                    type="button"
-                    onClick={() => setSelectedRole(r.role)}
-                    className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center gap-2 transition ${
-                      selectedRole === r.role
-                        ? 'border-agro-500 bg-agro-950/70 text-agro-300 shadow-sm'
-                        : 'border-slate-800 bg-slate-950/50 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <span className="text-lg">{r.icon}</span>
-                    <div className="overflow-hidden">
-                      <span className="block truncate">{r.title}</span>
-                      <span className="text-[10px] text-slate-400 font-normal block truncate">
-                        ({r.titleHi})
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={actionLoading || isLoading}
-            className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-agro-500 to-emerald-600 hover:from-agro-600 hover:to-emerald-700 text-white font-bold text-xs transition shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 mt-2"
-          >
-            {actionLoading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <span>{isRegisterMode ? 'Complete Registration & Enter' : 'Sign In to AsraVerse'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* 1-Click Instant Demo Login Switcher */}
-        <div className="pt-2 border-t border-slate-800 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-slate-400 flex items-center gap-1">
-              <Shield className="w-3.5 h-3.5 text-agro-400" />
-              1-Click Demo Testing Accounts:
-            </span>
-            <span className="text-[10px] text-emerald-400 font-bold">Live Credentials</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('FARMER')}
-              className="p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-agro-500 text-left text-xs transition"
-            >
-              <div className="font-bold text-white flex items-center gap-1">🌾 Farmer</div>
-              <div className="text-[10px] text-slate-400">Ramesh K.</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('BUYER')}
-              className="p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-agro-500 text-left text-xs transition"
-            >
-              <div className="font-bold text-white flex items-center gap-1">🛒 Buyer</div>
-              <div className="text-[10px] text-slate-400">Suresh P.</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('EXPERT')}
-              className="p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-agro-500 text-left text-xs transition"
-            >
-              <div className="font-bold text-white flex items-center gap-1">🔬 Expert</div>
-              <div className="text-[10px] text-slate-400">Dr. Anita</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('ADMIN')}
-              className="p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-agro-500 text-left text-xs transition"
-            >
-              <div className="font-bold text-white flex items-center gap-1">🛡️ Admin</div>
-              <div className="text-[10px] text-slate-400">Platform</div>
-            </button>
-          </div>
         </div>
 
-        {/* Footer info */}
-        <div className="text-center text-xs text-slate-400 space-y-2 pt-2 border-t border-slate-800">
-          <div className="flex items-center justify-center gap-1.5 text-[11px] text-emerald-400 font-medium">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Digital Agriculture Governance & Encrypted Session Security</span>
-          </div>
+        {isRegisterMode && (
+          <fieldset>
+            <legend className="mb-4 block text-eyebrow uppercase text-white/45">
+              Account role
+            </legend>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+              {registerRoles.map((r) => (
+                <label
+                  key={r.role}
+                  className={`flex cursor-pointer items-center gap-3 border-b py-3.5 text-sm transition-colors duration-300 ${
+                    selectedRole === r.role
+                      ? 'border-agro-400 text-white'
+                      : 'border-white/10 text-white/45 hover:text-white/80'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="role"
+                    value={r.role}
+                    checked={selectedRole === r.role}
+                    onChange={() => setSelectedRole(r.role)}
+                    className="sr-only"
+                  />
+                  <span aria-hidden="true">{r.icon}</span>
+                  <span>{r.title}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
+        <Button
+          type="submit"
+          variant="inverse"
+          size="lg"
+          arrow
+          loading={actionLoading || isLoading}
+          className="w-full"
+        >
+          {isRegisterMode ? 'Create account' : 'Sign in'}
+        </Button>
+      </form>
+
+      {/* Demo accounts — kept from the previous build */}
+      <div className="mt-12 border-t border-white/10 pt-6">
+        <p className="text-eyebrow uppercase text-white/30">Demo profiles</p>
+        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+          {(['FARMER', 'BUYER', 'EXPERT', 'ADMIN'] as UserRole[]).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => handleQuickDemo(r)}
+              className="link-underline text-xs text-white/40 hover:text-white"
+            >
+              {r.charAt(0) + r.slice(1).toLowerCase()}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Google Role Selection Modal */}
+      {/* Google role modal */}
       {showGoogleRoleModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-in zoom-in-95">
-            <div className="text-center space-y-1">
-              <h3 className="text-lg font-black text-white">Select Your Account Type</h3>
-              <p className="text-xs text-slate-400">
-                Please choose your primary role for Google Authentication
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2.5">
-              {AVAILABLE_ROLES.filter((r) => r.role !== 'ADMIN').map((r) => (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/90 p-6 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Select your account type"
+        >
+          <div className="w-full max-w-md">
+            <p className="text-eyebrow uppercase text-white/40">Select your role</p>
+            <p className="mt-6 font-display text-display-4 font-medium text-white">
+              How will you use AsraVerse?
+            </p>
+            <div className="mt-10">
+              {registerRoles.map((r) => (
                 <button
                   key={r.role}
                   type="button"
                   onClick={() => handleGoogleSignIn(r.role)}
-                  className="p-3.5 rounded-2xl border border-slate-800 bg-slate-950 hover:border-agro-500 text-left flex items-center gap-3 transition"
+                  className="group flex w-full items-center gap-4 border-b border-white/10 py-5 text-left text-white/60 transition-colors hover:text-white"
                 >
-                  <span className="text-2xl">{r.icon}</span>
-                  <div>
-                    <div className="font-bold text-white text-xs">
-                      {r.title} ({r.titleHi})
-                    </div>
-                    <div className="text-[10px] text-slate-400">{r.badge}</div>
-                  </div>
+                  <span aria-hidden="true" className="text-lg">
+                    {r.icon}
+                  </span>
+                  <span className="font-display text-lg font-medium transition-transform duration-500 ease-editorial group-hover:translate-x-1.5">
+                    {r.title}
+                  </span>
                 </button>
               ))}
             </div>
-
             <button
               type="button"
               onClick={() => setShowGoogleRoleModal(false)}
-              className="w-full py-2.5 text-xs text-slate-400 hover:text-white font-bold"
+              className="link-underline mt-8 text-xs text-white/40 hover:text-white"
             >
               Cancel
             </button>
           </div>
         </div>
       )}
-    </div>
+
+      <Link
+        to="/"
+        className="mt-12 inline-flex items-center gap-2 text-xs text-white/35 transition-colors hover:text-white"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+        Back to homepage
+      </Link>
+    </AuthLayout>
   );
 };
-

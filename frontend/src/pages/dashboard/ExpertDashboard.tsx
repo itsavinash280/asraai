@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { PageHeader } from '../../components/dashboard';
 
 export const ExpertDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -43,21 +44,12 @@ export const ExpertDashboard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="rounded-3xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white p-6 sm:p-8 shadow-xl">
-        <div className="space-y-1">
-          <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-            Agricultural Specialist Console
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold">
-            Welcome, {user?.name || 'Dr. Anita Verma (Agronomist)'}!
-          </h1>
-          <p className="text-xs text-slate-300">
-            Review AI plant pathology diagnoses, answer farmers' queries, and verify chemical/organic treatment guidelines.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-14">
+      <PageHeader
+        eyebrow="Agricultural specialist console"
+        title={<>Welcome, {user?.name || 'Dr. Anita Verma'}.</>}
+        lede="Review AI plant pathology diagnoses, answer farmers' queries, and verify chemical and organic treatment guidelines."
+      />
 
       {/* Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">

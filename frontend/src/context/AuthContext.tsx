@@ -9,6 +9,7 @@ import {
   onAuthStateChanged,
   signOut,
   sendEmailVerification,
+  sendPasswordResetEmail,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
@@ -82,6 +83,7 @@ interface AuthContextType {
   login: (emailOrPhone: string, password?: string) => Promise<AuthResponse>;
   register: (data: { name: string; email: string; phone?: string; password?: string; role: UserRole }) => Promise<AuthResponse>;
   loginWithGoogle: (role?: UserRole, customUser?: { name: string; email: string; avatar?: string }) => Promise<AuthResponse>;
+  resetPassword: (email: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
 }
 
@@ -389,7 +391,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 4. Sign Out
+  // 4. Password reset (Firebase Authentication - no database involved)
+  const resetPassword = async (email: string): Promise<AuthResponse> => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      return { success: false, message: 'Enter your email address first.' };
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, trimmed);
+    } catch (e: any) {
+      const code = e?.code || '';
+      if (code === 'auth/invalid-email') {
+        return { success: false, message: 'Please enter a valid email address.' };
+      }
+      if (code === 'auth/too-many-requests') {
+        return { success: false, message: 'Too many requests. Please try again shortly.' };
+      }
+      // Anything else (including user-not-found) falls through to the generic
+      // confirmation below so the form cannot be used to enumerate accounts.
+    }
+
+    return {
+      success: true,
+      message: `If an account exists for ${trimmed}, a reset link is on its way.`,
+    };
+  };
+
+  // 5. Sign Out
   const logout = async () => {
     try {
       await signOut(auth);
@@ -411,6 +440,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         loginWithGoogle,
+        resetPassword,
         logout,
       }}
     >

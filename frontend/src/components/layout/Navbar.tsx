@@ -1,229 +1,172 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Sprout,
   Mic,
   ShoppingCart,
-  User as UserIcon,
   LogOut,
-  ChevronDown,
   Sun,
   Moon,
   Menu,
-  X,
-  PhoneCall,
-  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useVoiceAssistant } from '../../context/VoiceAssistantContext';
-import { UserRole } from '../../types';
+
+const PORTALS = [
+  { to: '/admin/login', label: 'Administration' },
+  { to: '/expert/login', label: 'KVK agri expert' },
+  { to: '/transport/login', label: 'Logistics partner' },
+];
 
 export const Navbar: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
   const { user, logout } = useAuth();
   const { cartCount } = useCart();
   const { openVoiceAssistant, isSpeaking } = useVoiceAssistant();
   const navigate = useNavigate();
+
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
-    if (!isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', !isDarkMode);
   };
 
-  return (
-    <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 shadow-sm">
-      {/* Top Advisory Bar */}
-      <div className="bg-agro-900 text-white text-xs py-1.5 px-4 flex justify-center items-center">
-        <div className="flex items-center gap-2">
-          <span className="bg-agro-600 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider">
-            Government of India Aligned
-          </span>
-          <span className="text-agro-200">
-            Kisan Call Centre Toll-Free: 1800-180-1551 (6:00 AM - 10:00 PM)
-          </span>
-        </div>
-      </div>
+  // Close the profile menu on outside click or Escape.
+  useEffect(() => {
+    if (!profileDropdownOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setProfileDropdownOpen(false);
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [profileDropdownOpen]);
 
-      {/* Main Navbar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Left: Brand */}
-        <div className="flex items-center gap-4">
+  const iconButton =
+    'grid h-10 w-10 place-items-center rounded-full text-ink-500 transition-colors duration-300 hover:bg-ink-950/[0.04] hover:text-ink-950 dark:text-ink-300 dark:hover:bg-white/5 dark:hover:text-white';
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-ink-950/10 bg-paper-100/85 backdrop-blur-xl dark:border-white/10 dark:bg-ink-950/85">
+      <div className="flex h-16 items-center justify-between gap-4 px-gutter">
+        {/* Left */}
+        <div className="flex items-center gap-3">
           <button
             onClick={toggleSidebar}
-            className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
-            aria-label="Toggle Sidebar"
+            className={`${iconButton} lg:hidden`}
+            aria-label="Toggle navigation"
           >
-            <Menu className="w-6 h-6" />
+            <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
 
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-agro-600 flex items-center justify-center text-white shadow-md shadow-agro-600/30 group-hover:scale-105 transition">
-              <Sprout className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                  Asra<span className="text-agro-600">Verse</span>
-                </span>
-                <span className="text-[11px] font-bold bg-agro-100 dark:bg-agro-950 text-agro-700 dark:text-agro-300 px-1.5 py-0.5 rounded">
-                  AI
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                National Agriculture Intelligence Portal
-              </p>
-            </div>
+          <Link
+            to="/"
+            className="font-display text-lg font-semibold tracking-tight text-ink-950 dark:text-white"
+          >
+            AsraVerse<span className="text-agro-600 dark:text-agro-400">.</span>
           </Link>
         </div>
 
-        {/* Center: Voice Assistant Highlight Button */}
-        <div className="hidden md:flex items-center">
+        {/* Right */}
+        <div className="flex items-center gap-1.5">
           <button
             onClick={openVoiceAssistant}
-            className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-agro-600 to-emerald-600 text-white text-sm font-semibold shadow-md shadow-agro-600/25 hover:from-agro-700 hover:to-emerald-700 active:scale-95 transition"
+            className="group mr-1 hidden items-center gap-2.5 rounded-full border border-ink-950/15 py-2 pl-3.5 pr-4 text-[13px] text-ink-700 transition-colors duration-300 hover:border-ink-950/40 sm:flex dark:border-white/15 dark:text-ink-200 dark:hover:border-white/40"
           >
-            <div className={`w-3 h-3 rounded-full bg-white ${isSpeaking ? 'animate-ping' : ''}`} />
-            <Mic className="w-4 h-4 text-white" />
-            <span>AI Voice Assistant</span>
-            <span className="bg-white/20 text-white text-[11px] px-2 py-0.5 rounded-full font-medium">
-              हिंदी / Eng
-            </span>
+            <span
+              aria-hidden="true"
+              className={`h-1.5 w-1.5 rounded-full bg-agro-500 ${isSpeaking ? 'animate-ping' : ''}`}
+            />
+            <Mic className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Voice</span>
+            <span className="text-ink-400">हिंदी</span>
           </button>
-        </div>
 
-        {/* Right Actions */}
-        <div className="flex items-center gap-3">
-          {/* Cart for Buyers / Farmers */}
-          <Link
-            to="/cart"
-            className="relative p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            title="Shopping Cart"
-          >
-            <ShoppingCart className="w-5 h-5" />
+          <Link to="/cart" className={`${iconButton} relative`} aria-label="Cart">
+            <ShoppingCart className="h-5 w-5" aria-hidden="true" />
             {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-amber-500 text-slate-950 text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center shadow">
+              <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-agro-600 px-1 text-[10px] font-semibold tabular-nums text-white">
                 {cartCount}
               </span>
             )}
           </Link>
 
-          {/* Dark Mode Toggle */}
           <button
             onClick={toggleDarkMode}
-            className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            title="Toggle Dark Mode"
+            className={iconButton}
+            aria-label={isDarkMode ? 'Switch to light theme' : 'Switch to dark theme'}
           >
-            {isDarkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
+            {isDarkMode ? (
+              <Sun className="h-5 w-5" aria-hidden="true" />
+            ) : (
+              <Moon className="h-5 w-5" aria-hidden="true" />
+            )}
           </button>
 
-          {/* User Profile */}
           {user ? (
-            <div className="relative">
+            <div className="relative ml-1" ref={menuRef}>
               <button
-                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition border border-slate-200 dark:border-slate-700"
+                onClick={() => setProfileDropdownOpen((o) => !o)}
+                aria-expanded={profileDropdownOpen}
+                aria-haspopup="menu"
+                className="flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3 transition-colors duration-300 hover:bg-ink-950/[0.04] dark:hover:bg-white/5"
               >
-                <img
-                  src={user.avatar || 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=150&q=80'}
-                  alt={user.name}
-                  className="w-8 h-8 rounded-lg object-cover"
-                />
-                <div className="hidden sm:block text-left text-xs leading-tight">
-                  <div className="font-semibold text-slate-900 dark:text-white truncate max-w-[110px]">
-                    {user.name.split(' ')[0]}
-                  </div>
-                  <div className="text-[10px] text-agro-600 dark:text-agro-400 font-bold uppercase">
-                    {user.role}
-                  </div>
-                </div>
-                <ChevronDown className="w-4 h-4 text-slate-400" />
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-ink-950 text-xs font-semibold text-paper-50 dark:bg-white dark:text-ink-950">
+                  {user.name.charAt(0).toUpperCase()}
+                </span>
+                <span className="hidden text-[13px] text-ink-700 sm:block dark:text-ink-200">
+                  {user.name}
+                </span>
               </button>
 
-              {/* Profile Dropdown */}
               {profileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50 animate-in fade-in slide-in-from-top-2">
-                  <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
-                    <p className="text-xs text-slate-400">Signed in as</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{user.name}</p>
-                    <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded bg-agro-100 dark:bg-agro-900 text-agro-700 dark:text-agro-300">
-                      {user.role} Account
-                    </span>
-                  </div>
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-3 w-64 border border-ink-950/10 bg-paper-50 p-5 shadow-xl shadow-ink-950/5 dark:border-white/10 dark:bg-ink-900"
+                >
+                  <p className="text-eyebrow uppercase text-ink-400">
+                    {user.role}
+                  </p>
+                  <p className="mt-2 truncate text-sm text-ink-950 dark:text-white">
+                    {user.email}
+                  </p>
 
-                  <Link
-                    to="/profile"
-                    onClick={() => setProfileDropdownOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  >
-                    <UserIcon className="w-4 h-4 text-slate-400" />
-                    Farm Profile
-                  </Link>
-
-                  <Link
-                    to="/orders"
-                    onClick={() => setProfileDropdownOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  >
-                    <ShieldCheck className="w-4 h-4 text-slate-400" />
-                    My Orders & Deliveries
-                  </Link>
-
-                  <Link
-                    to="/landing"
-                    onClick={() => setProfileDropdownOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2 text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                  >
-                    <Sprout className="w-4 h-4" />
-                    About AsraVerse Portal
-                  </Link>
-
-                  {/* Dedicated Staff Portals */}
-                  <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <p className="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Staff & Partner Portals
-                    </p>
-                    <Link
-                      to="/admin/login"
-                      onClick={() => setProfileDropdownOpen(false)}
-                      className="flex items-center justify-between px-4 py-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                    >
-                      <span>Admin Governance</span>
-                      <span className="text-[10px] font-semibold bg-rose-100 dark:bg-rose-950 px-1.5 py-0.5 rounded">Portal</span>
-                    </Link>
-                    <Link
-                      to="/expert/login"
-                      onClick={() => setProfileDropdownOpen(false)}
-                      className="flex items-center justify-between px-4 py-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
-                    >
-                      <span>KVK Agri Expert</span>
-                      <span className="text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-950 px-1.5 py-0.5 rounded">Portal</span>
-                    </Link>
-                    <Link
-                      to="/transport/login"
-                      onClick={() => setProfileDropdownOpen(false)}
-                      className="flex items-center justify-between px-4 py-1.5 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                    >
-                      <span>Transport & Fleet</span>
-                      <span className="text-[10px] font-semibold bg-amber-100 dark:bg-amber-950 px-1.5 py-0.5 rounded">Portal</span>
-                    </Link>
+                  <div className="mt-5 border-t border-ink-950/10 pt-4 dark:border-white/10">
+                    <p className="text-eyebrow uppercase text-ink-400">Portals</p>
+                    <ul className="mt-3 space-y-2.5">
+                      {PORTALS.map((p) => (
+                        <li key={p.to}>
+                          <Link
+                            to={p.to}
+                            role="menuitem"
+                            onClick={() => setProfileDropdownOpen(false)}
+                            className="link-underline text-[13px] text-ink-600 hover:text-ink-950 dark:text-ink-300 dark:hover:text-white"
+                          >
+                            {p.label}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
 
                   <button
+                    role="menuitem"
                     onClick={async () => {
                       setProfileDropdownOpen(false);
                       await logout();
                       navigate('/login', { replace: true });
                     }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-t border-slate-100 dark:border-slate-800 mt-1"
+                    className="mt-5 flex w-full items-center gap-2 border-t border-ink-950/10 pt-4 text-[13px] text-rose-600 transition-opacity hover:opacity-70 dark:border-white/10 dark:text-rose-400"
                   >
-                    <LogOut className="w-4 h-4" />
-                    Logout
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                    Log out
                   </button>
                 </div>
               )}
@@ -231,9 +174,9 @@ export const Navbar: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar 
           ) : (
             <Link
               to="/login"
-              className="px-4 py-2 rounded-xl bg-agro-600 text-white text-sm font-semibold hover:bg-agro-700 transition shadow-sm"
+              className="ml-2 rounded-full bg-ink-950 px-6 py-2.5 text-[13px] text-paper-50 transition-colors duration-300 hover:bg-agro-600 dark:bg-white dark:text-ink-950"
             >
-              Login
+              Log in
             </Link>
           )}
         </div>

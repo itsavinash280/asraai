@@ -9,6 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { PageHeader } from '../../components/dashboard';
 
 export const TransportDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -46,21 +47,12 @@ export const TransportDashboard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="rounded-3xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white p-6 sm:p-8 shadow-xl">
-        <div className="space-y-1">
-          <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
-            Logistics & Freight Operator Console
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold">
-            Welcome, {user?.name || 'Kisaan Express Logistics'}! 🚚
-          </h1>
-          <p className="text-xs text-slate-300">
-            Manage farm-to-mandi agricultural freight dispatches and update real-time status.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-14">
+      <PageHeader
+        eyebrow="Logistics & freight operator console"
+        title={<>Welcome, {user?.name || 'Kisaan Express Logistics'}.</>}
+        lede="Manage farm-to-mandi agricultural freight dispatches and update real-time status."
+      />
 
       {/* Deliveries List */}
       <div className="space-y-4">
