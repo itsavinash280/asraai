@@ -19,6 +19,7 @@ import {
 import { useAuth, AVAILABLE_ROLES } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 import { getRoleHomePath } from '../../components/common/ProtectedRoute';
+import { EmailVerificationScreen } from '../../components/auth/EmailVerificationScreen';
 
 export interface LoginPageProps {
   initialRole?: UserRole;
@@ -45,6 +46,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
 
   // Role Selection Modal for Google Sign In
   const [showGoogleRoleModal, setShowGoogleRoleModal] = useState(false);
+
+  // Email Verification Screen
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
 
   // If user is already authenticated, redirect to destination or role dashboard
   useEffect(() => {
@@ -81,7 +85,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
       });
       setActionLoading(false);
 
-      if (res.success && res.role) {
+      if (res.needsVerification && res.verificationEmail) {
+        setVerificationEmail(res.verificationEmail);
+      } else if (res.success && res.role) {
         const from = (location.state as any)?.from?.pathname;
         navigate(from || getRoleHomePath(res.role), { replace: true });
       } else {
@@ -91,7 +97,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
       const res = await login(email, password);
       setActionLoading(false);
 
-      if (res.success && res.role) {
+      if (res.needsVerification && res.verificationEmail) {
+        setVerificationEmail(res.verificationEmail);
+      } else if (res.success && res.role) {
         const from = (location.state as any)?.from?.pathname;
         navigate(from || getRoleHomePath(res.role), { replace: true });
       } else {
@@ -109,7 +117,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
     const res = await loginWithGoogle(roleToUse);
     setGoogleLoading(false);
 
-    if (res.success && res.role) {
+    if (res.needsVerification && res.verificationEmail) {
+      setVerificationEmail(res.verificationEmail);
+    } else if (res.success && res.role) {
       const from = (location.state as any)?.from?.pathname;
       navigate(from || getRoleHomePath(res.role), { replace: true });
     } else {
@@ -141,13 +151,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialRole }) => {
     const res = await login(demoEmail, demoPass);
     setActionLoading(false);
 
-    if (res.success && res.role) {
+    if (res.needsVerification && res.verificationEmail) {
+      setVerificationEmail(res.verificationEmail);
+    } else if (res.success && res.role) {
       const from = (location.state as any)?.from?.pathname;
       navigate(from || getRoleHomePath(res.role), { replace: true });
     } else {
       setErrorMsg(res.message || 'Demo account login failed.');
     }
   };
+
+  // If email verification is needed, show the verification screen instead
+  if (verificationEmail) {
+    return <EmailVerificationScreen email={verificationEmail} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 py-12 select-none relative overflow-hidden">

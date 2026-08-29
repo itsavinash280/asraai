@@ -6,6 +6,7 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   signOut,
+  sendEmailVerification,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
@@ -68,6 +69,8 @@ export interface AuthResponse {
   message?: string;
   role?: UserRole;
   user?: User;
+  needsVerification?: boolean;
+  verificationEmail?: string;
 }
 
 interface AuthContextType {
@@ -210,6 +213,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+
+      // Check if email is verified; if not, sign them out and require verification
+      if (!cred.user.emailVerified) {
+        await signOut(auth);
+        return {
+          success: false,
+          needsVerification: true,
+          verificationEmail: cred.user.email || email,
+          message: `We have sent you a verification email to ${cred.user.email || email}. Please verify it and log in.`,
+        };
+      }
+
       const appUser = toAppUser(cred.user);
       return { success: true, role: appUser.role, user: appUser };
     } catch (e: any) {
@@ -235,8 +250,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Remember the selected role locally — no profile data is written anywhere.
       writeRole(cred.user.uid, data.role);
 
-      const appUser = toAppUser(cred.user, data.role);
-      return { success: true, role: appUser.role, user: appUser };
+      // Send verification email
+      try {
+        await sendEmailVerification(cred.user);
+      } catch (err) {
+        console.warn('[Firebase Auth] Could not send verification email:', err);
+      }
+
+      // Sign out immediately — don't auto-sign in
+      await signOut(auth);
+
+      return {
+        success: false,
+        needsVerification: true,
+        verificationEmail: cred.user.email || data.email,
+        message: `We have sent you a verification email to ${cred.user.email || data.email}. Please verify it and log in.`,
+      };
     } catch (e: any) {
       return { success: false, message: signUpErrorMessage(e?.code || '') };
     }
