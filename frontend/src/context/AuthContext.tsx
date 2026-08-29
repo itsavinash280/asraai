@@ -13,7 +13,8 @@ import {
   User as FirebaseUser,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { User, UserRole } from '../types';
+import { fetchUserProfile, saveUserProfile, skipUserOnboarding } from '../lib/userProfile';
+import { User, UserProfile, UserRole } from '../types';
 
 export interface RoleInfo {
   role: UserRole;
@@ -80,6 +81,14 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  /** users/{uid} from Cloud Firestore; null until the first read resolves. */
+  profile: UserProfile | null;
+  isProfileLoading: boolean;
+  /** True once the onboarding wizard has been completed for this account. */
+  isProfileComplete: boolean;
+  saveProfile: (patch: Partial<UserProfile>) => Promise<AuthResponse>;
+  skipProfileSetup: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   login: (emailOrPhone: string, password?: string) => Promise<AuthResponse>;
   register: (data: { name: string; email: string; phone?: string; password?: string; role: UserRole }) => Promise<AuthResponse>;
   loginWithGoogle: (role?: UserRole, customUser?: { name: string; email: string; avatar?: string }) => Promise<AuthResponse>;
@@ -151,9 +160,10 @@ const googleErrorMessage = (code: string): string => {
 /* -------------------------------------------------------------------------- */
 /*  Role handling                                                             */
 /*                                                                            */
-/*  Firebase Authentication holds no application profile data, and we are not  */
-/*  persisting profiles yet. The role chosen at sign-up is remembered locally  */
-/*  per Firebase UID so the existing dashboard router keeps working.           */
+/*  Firebase Authentication holds no application profile data. The role chosen */
+/*  at sign-up is remembered locally per Firebase UID so the dashboard router  */
+/*  can resolve it before the Firestore profile read completes; it is also     */
+/*  mirrored onto users/{uid} by every profile write.                          */
 /* -------------------------------------------------------------------------- */
 
 const roleKey = (uid: string) => `asraverse_role_${uid}`;
@@ -228,6 +238,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isProfileLoading, setIsProfileLoading] = useState<boolean>(false);
 
   // Firebase restores the session itself; this listener is the single source of truth.
   useEffect(() => {
@@ -235,6 +247,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!fbUser) {
         setUser(null);
         setToken(null);
+        setProfile(null);
+        setIsProfileLoading(false);
         localStorage.removeItem('asraverse_token');
         localStorage.removeItem('asraverse_user');
         setIsLoading(false);
@@ -270,6 +284,85 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* ---------------------------------------------------------------------- */
+  /*  Cloud Firestore profile (users/{uid})                                   */
+  /* ---------------------------------------------------------------------- */
+
+  // Loaded whenever the signed-in account changes. A brand-new account resolves
+  // to a stub with isProfileComplete false, which is what opens the wizard.
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsProfileLoading(true);
+
+    fetchUserProfile(user)
+      .then((loaded) => {
+        if (!cancelled) setProfile(loaded);
+      })
+      .finally(() => {
+        if (!cancelled) setIsProfileLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // Re-runs on sign-in/sign-out and on a role change, not on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.role]);
+
+  const refreshProfile = async () => {
+    if (!user) return;
+    setIsProfileLoading(true);
+    try {
+      setProfile(await fetchUserProfile(user));
+    } finally {
+      setIsProfileLoading(false);
+    }
+  };
+
+  /** Merge-write the wizard's answers and update the context immediately. */
+  const saveProfile = async (patch: Partial<UserProfile>): Promise<AuthResponse> => {
+    if (!user) {
+      return { success: false, message: 'You need to be signed in to save your profile.' };
+    }
+
+    try {
+      const saved = await saveUserProfile(user, {
+        createdAt: profile?.createdAt || new Date().toISOString(),
+        ...patch,
+      });
+      setProfile((prev) => ({ ...(prev || {}), ...saved }));
+      return { success: true, user };
+    } catch (e: any) {
+      console.warn('[Firestore] Could not save users/%s:', user.id, e);
+      return {
+        success: false,
+        message:
+          e?.code === 'permission-denied'
+            ? 'Your account does not have permission to save this profile.'
+            : 'We could not save your details. Please check your connection and try again.',
+      };
+    }
+  };
+
+  /** "Skip for now" — dismisses the wizard without marking the profile complete. */
+  const skipProfileSetup = async () => {
+    setProfile((prev) =>
+      prev ? { ...prev, onboardingSkippedAt: new Date().toISOString() } : prev,
+    );
+
+    if (!user) return;
+    try {
+      await skipUserOnboarding(user);
+    } catch (err) {
+      console.warn('[Firestore] Could not record the skipped onboarding:', err);
+    }
+  };
 
   // 1. Email & Password Sign In
   const login = async (email: string, password?: string): Promise<AuthResponse> => {
@@ -437,6 +530,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         token,
         isLoading,
+        profile,
+        isProfileLoading,
+        isProfileComplete: profile?.isProfileComplete === true,
+        saveProfile,
+        skipProfileSetup,
+        refreshProfile,
         login,
         register,
         loginWithGoogle,

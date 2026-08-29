@@ -1,0 +1,32 @@
+rules_version = '2';
+
+// Cloud Firestore rules for AsraVerse AI.
+//
+// The project has no Firebase CLI setup in this repo yet, so these rules are
+// kept here as the source of truth — paste them into
+// Firebase Console -> Firestore Database -> Rules (or deploy with
+// `firebase deploy --only firestore:rules` once the CLI is wired up).
+//
+// Without them the default deny-all rules reject every profile read and write
+// and the onboarding wizard cannot save.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // users/{uid} — the profile document written by the onboarding wizard.
+    // An account may only ever read and write its own document.
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid;
+
+      allow delete: if false;
+    }
+
+    // Everything else stays closed until it has rules of its own.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

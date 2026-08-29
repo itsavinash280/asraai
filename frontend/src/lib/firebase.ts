@@ -1,7 +1,8 @@
-// Firebase initialisation — Authentication only.
-// Firestore / Storage are intentionally NOT initialised here.
+// Firebase initialisation — Authentication + Cloud Firestore.
+// Firestore backs the user profile document at users/{uid} (onboarding wizard).
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, browserLocalPersistence, setPersistence } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 
 // Values can be overridden per-environment via Vite env vars; the defaults are the
 // AsraVerse web app credentials (Firebase web config is public by design).
@@ -18,6 +19,8 @@ const firebaseConfig = {
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
+
+export const db = getFirestore(app);
 
 // Keep the session alive across page reloads / tab restarts.
 setPersistence(auth, browserLocalPersistence).catch((err) => {

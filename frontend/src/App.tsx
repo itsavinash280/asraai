@@ -8,6 +8,7 @@ import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { Footer } from './components/layout/Footer';
 import { VoiceAssistantModal } from './components/voice/VoiceAssistantModal';
+import { OnboardingWizard } from './components/onboarding';
 import { ProtectedRoute, LoadingSplashScreen } from './components/common/ProtectedRoute';
 import { LandingPage } from './pages/landing/LandingPage';
 
@@ -45,6 +46,8 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       <Navbar toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <VoiceAssistantModal />
+      {/* Opens over the dashboard until users/{uid}.isProfileComplete is true. */}
+      <OnboardingWizard />
 
       {/* Sidebar is 18rem (w-72) from the lg breakpoint up. */}
       <main className="flex-1 lg:pl-72">

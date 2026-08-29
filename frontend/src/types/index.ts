@@ -206,3 +206,88 @@ export interface ExpertConsultation {
   status: 'OPEN' | 'IN_REVIEW' | 'ANSWERED' | 'CLOSED';
   createdAt: string;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Onboarding — the users/{uid} profile document in Cloud Firestore           */
+/* -------------------------------------------------------------------------- */
+
+export type PreferredLanguage = 'HI' | 'EN' | 'HINGLISH';
+
+export type OnboardingSoilType = 'ALLUVIAL' | 'BLACK' | 'RED' | 'SANDY' | 'CLAY';
+export type IrrigationSource = 'TUBEWELL' | 'CANAL' | 'RAINFED' | 'DRIP';
+export type BuyerType = 'WHOLESALER' | 'RETAILER' | 'FOOD_PROCESSOR' | 'EXPORTER';
+export type ExpertSpecialization =
+  | 'PEST_DISEASE'
+  | 'SOIL_HEALTH'
+  | 'CROP_MANAGEMENT'
+  | 'ORGANIC_FARMING';
+export type TransportVehicleType = 'PICKUP_1TON' | 'TRUCK_10TON' | 'CONTAINER_20TON';
+
+export interface BankAccountDetails {
+  accountHolder: string;
+  bankName: string;
+  ifscCode: string;
+}
+
+/** Step 1 — asked of every role. */
+export interface CommonProfileFields {
+  state: string;
+  district: string;
+  pincode: string;
+  preferredLanguage: PreferredLanguage;
+}
+
+export interface FarmerProfileFields {
+  farmSizeAcres: number;
+  soilType: OnboardingSoilType;
+  irrigationSource: IrrigationSource;
+  primaryCrops: string[];
+  nearestMandi: string;
+  /** Optional — used for direct DBT payouts. */
+  bankAccount?: BankAccountDetails;
+}
+
+export interface BuyerProfileFields {
+  firmName: string;
+  buyerType: BuyerType;
+  gstin?: string;
+  apmcLicense?: string;
+  interestedCommodities: string[];
+  deliveryWarehouseAddress: string;
+}
+
+export interface ExpertProfileFields {
+  designation: string;
+  kvkCenter: string;
+  icarRegistrationNo: string;
+  specialization: ExpertSpecialization;
+}
+
+export interface TransportProfileFields {
+  companyName: string;
+  vehicleType: TransportVehicleType;
+  vehicleRegNo: string;
+  driverLicenseNo: string;
+}
+
+/**
+ * The full users/{uid} document. Role-specific blocks are all optional because
+ * a given account only ever fills in the one matching its role.
+ */
+export interface UserProfile
+  extends Partial<CommonProfileFields>,
+    Partial<FarmerProfileFields>,
+    Partial<BuyerProfileFields>,
+    Partial<ExpertProfileFields>,
+    Partial<TransportProfileFields> {
+  uid: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  role?: UserRole;
+  isProfileComplete: boolean;
+  /** Set when the user chose "Skip for now" so we can nudge them again later. */
+  onboardingSkippedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
