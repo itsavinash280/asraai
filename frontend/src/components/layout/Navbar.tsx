@@ -174,6 +174,15 @@ export const Navbar: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar 
                     My Orders & Deliveries
                   </Link>
 
+                  <Link
+                    to="/landing"
+                    onClick={() => setProfileDropdownOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2 text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                  >
+                    <Sprout className="w-4 h-4" />
+                    About AsraVerse Portal
+                  </Link>
+
                   {/* Dedicated Staff Portals */}
                   <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
                     <p className="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -206,10 +215,10 @@ export const Navbar: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar 
                   </div>
 
                   <button
-                    onClick={() => {
-                      logout();
+                    onClick={async () => {
                       setProfileDropdownOpen(false);
-                      navigate('/login');
+                      await logout();
+                      navigate('/login', { replace: true });
                     }}
                     className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-t border-slate-100 dark:border-slate-800 mt-1"
                   >

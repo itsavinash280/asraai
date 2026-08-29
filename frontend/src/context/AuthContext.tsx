@@ -1,6 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signOut,
+  User as FirebaseUser,
+} from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { User, UserRole } from '../types';
-import { apiRequest } from '../api/client';
 
 export interface RoleInfo {
   role: UserRole;
@@ -67,119 +76,207 @@ interface AuthContextType {
   isLoading: boolean;
   login: (emailOrPhone: string, password?: string) => Promise<AuthResponse>;
   register: (data: { name: string; email: string; phone?: string; password?: string; role: UserRole }) => Promise<AuthResponse>;
-  logout: () => void;
+  loginWithGoogle: (role?: UserRole, customUser?: { name: string; email: string; avatar?: string }) => Promise<AuthResponse>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/* -------------------------------------------------------------------------- */
+/*  Error message mapping                                                     */
+/* -------------------------------------------------------------------------- */
+
+const INCORRECT_CREDENTIALS = 'Email or password is incorrect';
+const USER_ALREADY_EXISTS = 'User already exists. Please sign in';
+
+const signInErrorMessage = (code: string): string => {
+  switch (code) {
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Please contact support.';
+    case 'auth/too-many-requests':
+      return 'Too many failed attempts. Please try again in a few minutes.';
+    case 'auth/network-request-failed':
+      return 'Network error. Please check your internet connection.';
+    // auth/invalid-credential, auth/wrong-password, auth/user-not-found,
+    // auth/invalid-email and anything else all read as bad credentials.
+    default:
+      return INCORRECT_CREDENTIALS;
+  }
+};
+
+const signUpErrorMessage = (code: string): string => {
+  switch (code) {
+    case 'auth/email-already-in-use':
+      return USER_ALREADY_EXISTS;
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/weak-password':
+      return 'Password must be at least 6 characters long.';
+    case 'auth/network-request-failed':
+      return 'Network error. Please check your internet connection.';
+    case 'auth/operation-not-allowed':
+      return 'Email/password sign-up is not enabled for this Firebase project.';
+    default:
+      return 'Could not create your account. Please try again.';
+  }
+};
+
+/* -------------------------------------------------------------------------- */
+/*  Role handling                                                             */
+/*                                                                            */
+/*  Firebase Authentication holds no application profile data, and we are not  */
+/*  persisting profiles yet. The role chosen at sign-up is remembered locally  */
+/*  per Firebase UID so the existing dashboard router keeps working.           */
+/* -------------------------------------------------------------------------- */
+
+const roleKey = (uid: string) => `asraverse_role_${uid}`;
+
+const readRole = (uid: string): UserRole => {
+  try {
+    const stored = localStorage.getItem(roleKey(uid)) as UserRole | null;
+    if (stored && AVAILABLE_ROLES.some((r) => r.role === stored)) return stored;
+  } catch {
+    /* localStorage unavailable */
+  }
+  return 'FARMER';
+};
+
+const writeRole = (uid: string, role: UserRole) => {
+  try {
+    localStorage.setItem(roleKey(uid), role);
+  } catch {
+    /* localStorage unavailable */
+  }
+};
+
+/** Build the app-level User from the Firebase auth record only. */
+const toAppUser = (fbUser: FirebaseUser, role?: UserRole): User => {
+  const email = fbUser.email || '';
+  const fallbackName = email.split('@')[0] || 'AsraVerse User';
+
+  return {
+    id: fbUser.uid,
+    name: fbUser.displayName || fallbackName,
+    email,
+    phone: fbUser.phoneNumber || '',
+    role: role || readRole(fbUser.uid),
+    isVerified: fbUser.emailVerified,
+    avatar: fbUser.photoURL || undefined,
+  };
+};
+
+/* -------------------------------------------------------------------------- */
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const cached = localStorage.getItem('asraverse_user');
-      return cached ? JSON.parse(cached) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('asraverse_token') || null);
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Validate active session token with backend on mount
+  // Firebase restores the session itself; this listener is the single source of truth.
   useEffect(() => {
-    let isMounted = true;
-
-    const checkSession = async () => {
-      const savedToken = localStorage.getItem('asraverse_token');
-      if (!savedToken) {
-        if (isMounted) {
-          setUser(null);
-          setIsLoading(false);
-        }
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (!fbUser) {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem('asraverse_token');
+        localStorage.removeItem('asraverse_user');
+        setIsLoading(false);
         return;
       }
 
+      const appUser = toAppUser(fbUser);
+      setUser(appUser);
+      localStorage.setItem('asraverse_user', JSON.stringify(appUser));
+
       try {
-        const res = await apiRequest('/auth/me');
-        if (!isMounted) return;
-
-        if (res.success && res.user) {
-          setUser(res.user);
-          localStorage.setItem('asraverse_user', JSON.stringify(res.user));
-        } else {
-          // Token is invalid or expired
-          setUser(null);
-          setToken(null);
-          localStorage.removeItem('asraverse_token');
-          localStorage.removeItem('asraverse_user');
-        }
+        const idToken = await fbUser.getIdToken();
+        setToken(idToken);
+        localStorage.setItem('asraverse_token', idToken);
       } catch (err) {
-        console.warn('[Session Verification Notice]:', err);
-      } finally {
-        if (isMounted) setIsLoading(false);
+        console.warn('[Firebase Auth] Could not retrieve ID token:', err);
       }
-    };
 
-    checkSession();
+      setIsLoading(false);
+    });
 
-    return () => {
-      isMounted = false;
-    };
+    return () => unsubscribe();
   }, []);
 
-  // 1. Email / Phone & Password Sign In
-  const login = async (emailOrPhone: string, password?: string): Promise<AuthResponse> => {
-    setIsLoading(true);
+  // 1. Email & Password Sign In
+  const login = async (email: string, password?: string): Promise<AuthResponse> => {
+    if (!password) {
+      return { success: false, message: INCORRECT_CREDENTIALS };
+    }
+
     try {
-      const res = await apiRequest('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ emailOrPhone, password }),
-      });
-
-      if (res.success && res.user && res.token) {
-        setUser(res.user);
-        setToken(res.token);
-        localStorage.setItem('asraverse_token', res.token);
-        localStorage.setItem('asraverse_user', JSON.stringify(res.user));
-        setIsLoading(false);
-        return { success: true, role: res.user.role, user: res.user };
-      }
-
-      setIsLoading(false);
-      return { success: false, message: res.message || 'Invalid email or password.' };
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const appUser = toAppUser(cred.user);
+      return { success: true, role: appUser.role, user: appUser };
     } catch (e: any) {
-      setIsLoading(false);
-      return { success: false, message: e.message || 'Login failed.' };
+      return { success: false, message: signInErrorMessage(e?.code || '') };
     }
   };
 
-  // 2. User Registration
-  const register = async (data: { name: string; email: string; phone?: string; password?: string; role: UserRole }): Promise<AuthResponse> => {
-    setIsLoading(true);
+  // 2. Email & Password Sign Up
+  const register = async (data: {
+    name: string;
+    email: string;
+    phone?: string;
+    password?: string;
+    role: UserRole;
+  }): Promise<AuthResponse> => {
+    if (!data.password) {
+      return { success: false, message: 'Please choose a password to create your account.' };
+    }
+
     try {
-      const res = await apiRequest('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      const cred = await createUserWithEmailAndPassword(auth, data.email.trim(), data.password);
 
-      if (res.success && res.user && res.token) {
-        setUser(res.user);
-        setToken(res.token);
-        localStorage.setItem('asraverse_token', res.token);
-        localStorage.setItem('asraverse_user', JSON.stringify(res.user));
-        setIsLoading(false);
-        return { success: true, role: res.user.role, user: res.user };
-      }
+      // Remember the selected role locally — no profile data is written anywhere.
+      writeRole(cred.user.uid, data.role);
 
-      setIsLoading(false);
-      return { success: false, message: res.message || 'Registration failed.' };
+      const appUser = toAppUser(cred.user, data.role);
+      return { success: true, role: appUser.role, user: appUser };
     } catch (e: any) {
-      setIsLoading(false);
-      return { success: false, message: e.message || 'Registration failed.' };
+      return { success: false, message: signUpErrorMessage(e?.code || '') };
     }
   };
 
-  // 3. Sign Out
-  const logout = () => {
+  // 3. Google Sign In (Firebase Authentication provider — still no profile storage)
+  const loginWithGoogle = async (role: UserRole = 'FARMER'): Promise<AuthResponse> => {
+    try {
+      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+
+      // Only assign the requested role the first time this account is seen here.
+      let existing: string | null = null;
+      try {
+        existing = localStorage.getItem(roleKey(cred.user.uid));
+      } catch {
+        /* localStorage unavailable */
+      }
+      if (!existing) writeRole(cred.user.uid, role);
+
+      const appUser = toAppUser(cred.user);
+      return { success: true, role: appUser.role, user: appUser };
+    } catch (e: any) {
+      const code = e?.code || '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        return { success: false, message: 'Google sign-in was cancelled.' };
+      }
+      if (code === 'auth/operation-not-allowed') {
+        return { success: false, message: 'Google sign-in is not enabled for this Firebase project.' };
+      }
+      return { success: false, message: 'Google sign-in could not be completed.' };
+    }
+  };
+
+  // 4. Sign Out
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.warn('[Firebase Auth] Sign-out error:', err);
+    }
     setUser(null);
     setToken(null);
     localStorage.removeItem('asraverse_token');
@@ -194,6 +291,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         register,
+        loginWithGoogle,
         logout,
       }}
     >

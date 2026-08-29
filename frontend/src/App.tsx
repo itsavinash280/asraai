@@ -8,7 +8,8 @@ import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { Footer } from './components/layout/Footer';
 import { VoiceAssistantModal } from './components/voice/VoiceAssistantModal';
-import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { ProtectedRoute, LoadingSplashScreen } from './components/common/ProtectedRoute';
+import { LandingPage } from './pages/landing/LandingPage';
 
 import { FarmerDashboard } from './pages/dashboard/FarmerDashboard';
 import { BuyerDashboard } from './pages/dashboard/BuyerDashboard';
@@ -58,35 +59,56 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   );
 };
 
-export const AppContent: React.FC = () => {
+export const RoleDashboardRouter: React.FC = () => {
   const { user } = useAuth();
+
+  if (user?.role === 'BUYER') return <BuyerDashboard />;
+  if (user?.role === 'EXPERT') return <ExpertDashboard />;
+  if (user?.role === 'TRANSPORT') return <TransportDashboard />;
+  if (user?.role === 'ADMIN') return <AdminDashboard />;
+  return <FarmerDashboard />;
+};
+
+export const AppContent: React.FC = () => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingSplashScreen message="Connecting to AsraVerse AI Agricultural Intelligence..." />;
+  }
 
   return (
     <Routes>
-      {/* Public Entry Points */}
+      {/* Public Landing & Authentication */}
+      <Route path="/landing" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/expert/login" element={<ExpertLoginPage />} />
       <Route path="/transport/login" element={<TransportLoginPage />} />
 
-      {/* Main Root Role-Based Landing Route */}
+      {/* Root Route: Landing Page for logged-out visitors, Role Dashboard for authenticated users */}
       <Route
         path="/"
         element={
+          user ? (
+            <ProtectedRoute>
+              <AppLayout>
+                <RoleDashboardRouter />
+              </AppLayout>
+            </ProtectedRoute>
+          ) : (
+            <LandingPage />
+          )
+        }
+      />
+
+      {/* Explicit Dashboard Route */}
+      <Route
+        path="/dashboard"
+        element={
           <ProtectedRoute>
             <AppLayout>
-              {user?.role === 'BUYER' ? (
-                <BuyerDashboard />
-              ) : user?.role === 'EXPERT' ? (
-                <ExpertDashboard />
-              ) : user?.role === 'TRANSPORT' ? (
-                <TransportDashboard />
-              ) : user?.role === 'ADMIN' ? (
-                <AdminDashboard />
-              ) : (
-                <FarmerDashboard />
-              )}
+              <RoleDashboardRouter />
             </AppLayout>
           </ProtectedRoute>
         }
